@@ -1,270 +1,223 @@
-/* ROAR Registration — form logic */
+// ============================================================
+// BLENDING BEATZ — register.js
+// ============================================================
 
-/* =========================================================
-   1. SET THIS to your deployed Google Apps Script Web App URL
-      (Deploy > New deployment > Web app > Execute as: Me,
-      Who has access: Anyone). See Code.gs for the backend.
-   ========================================================= */
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxstr-Jf851GQ_UhNFFA5WP8fyK6jUg9eglF9UHYGG58HxYrWnQWANp7QOCbUMhXC3B/exec";
+/* ------------------------------------------------------------
+   CONFIG — Updated Google Apps Script Web App URL
+   ------------------------------------------------------------ */
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbycHd8-uoWqMDTcvOExUj8IL1kyoZI7326ZEasNePm_d424G66MLPKU5ntoL9iJsAPiYQ/exec";
 
-const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
+const MEMBER_COUNT = 20;
 
-document.addEventListener('DOMContentLoaded', () => {
+/* ---------- Nav scroll state ---------- */
+const nav = document.getElementById('siteNav');
+if (nav) {
+  window.addEventListener('scroll', () => nav.classList.toggle('scrolled', window.scrollY > 40), { passive: true });
+}
 
-  const form = document.getElementById('regForm');
-  const progressFill = document.getElementById('progressFill');
-  const formMsg = document.getElementById('formMsg');
-  const submitBtn = document.getElementById('submitBtn');
-  const successPanel = document.getElementById('success-panel');
-  const processAgreeCheckbox = document.getElementById('processAgreeCheckbox');
-  const registrationFormArea = document.getElementById('registrationFormArea');
-
-  /* --- progress bar tied to scroll through the form --- */
-  const updateProgress = () => {
-    const rect = form.getBoundingClientRect();
-    const total = rect.height - window.innerHeight * 0.6;
-    const scrolled = Math.min(Math.max(-rect.top, 0), total);
-    const pct = total > 0 ? (scrolled / total) * 100 : 0;
-    progressFill.style.width = pct + '%';
-  };
-  document.addEventListener('scroll', updateProgress);
-  updateProgress();
-
-  const toggleRegistrationAccess = () => {
-    if (!registrationFormArea || !processAgreeCheckbox) return;
-    const ready = processAgreeCheckbox.checked;
-    registrationFormArea.classList.toggle('active', ready);
-    registrationFormArea.setAttribute('aria-hidden', ready ? 'false' : 'true');
-  };
-
-  if (processAgreeCheckbox) {
-    processAgreeCheckbox.addEventListener('change', toggleRegistrationAccess);
-    toggleRegistrationAccess();
+/* ---------- Generate 20 member cards ---------- */
+const membersContainer = document.getElementById('membersContainer');
+if (membersContainer) {
+  for (let i = 1; i <= MEMBER_COUNT; i++) {
+    const card = document.createElement('div');
+    card.className = 'member-card';
+    card.innerHTML = `
+      <div class="member-card-head">
+        <div class="member-num">${i}</div>
+        <h4>Warrior ${i}</h4>
+      </div>
+      <div class="member-fields">
+        <div class="field">
+          <label>Full Name <span class="req">*</span></label>
+          <input type="text" name="member${i}_name" required placeholder="Full name">
+        </div>
+        <div class="field">
+          <label>Instrument <span class="req">*</span></label>
+          <input type="text" name="member${i}_instrument" required placeholder="e.g. Trumpet">
+        </div>
+        <div class="field">
+          <label>Grade</label>
+          <input type="text" name="member${i}_grade" placeholder="e.g. Grade 10">
+        </div>
+        <div class="field">
+          <label>Contact No.</label>
+          <input type="tel" name="member${i}_contact" placeholder="Optional">
+        </div>
+      </div>
+    `;
+    membersContainer.appendChild(card);
   }
+}
 
-  /* =========================================================
-     Section 2 → Section 3 / 4 conditional logic
-     ========================================================= */
-  const categoryInputs = document.querySelectorAll('input[name="category"]');
-  const prefectSection = document.getElementById('prefectInfoSection');
-  const gradeField = document.getElementById('gradeField');
-  const batchInput = document.getElementById('batchInput');
-  const positionField = document.getElementById('positionField');
-  const campAccessBox = document.getElementById('campAccessBox');
-  const campAccessInput = document.getElementById('campAccessInput');
-  const campAccessLabel = document.getElementById('campAccessLabel');
-  const campAccessSub = document.getElementById('campAccessSub');
+/* ---------- Photo upload handling ---------- */
+let captainPhotoData = null; // { base64, mimeType, filename }
+let groupPhotoData = null;
 
-  const applyCategoryRules = (category) => {
-    document.getElementById('categoryErr').style.display = 'none';
+function setupPhotoUpload(uploadId, inputId, previewId, statusId, onLoaded) {
+  const upload = document.getElementById(uploadId);
+  const input = document.getElementById(inputId);
+  const preview = document.getElementById(previewId);
+  const status = document.getElementById(statusId);
 
-    const isPrefect = category === 'Prefect';
-    const isOldPrefect = category === 'Old Prefect (Alumni)';
-    const isInvited = category === 'Invited School Prefect';
+  if (!input) return;
 
-    // Section 4 (Prefect Information) shows only for Prefect / Old Prefect
-    const showPrefectSection = isPrefect || isOldPrefect;
-    prefectSection.classList.toggle('active', showPrefectSection);
-    batchInput.required = showPrefectSection;
-
-    // Grade: "Students only" → hide for Old Prefect (alumni, not currently a student)
-    gradeField.style.display = isOldPrefect ? 'none' : 'block';
-
-    // Current Position: optional, only relevant for Old Prefects
-    positionField.style.display = isOldPrefect ? 'block' : 'none';
-
-    // Prefect Camp Access behaviour
-    if (isPrefect) {
-      campAccessInput.checked = true;
-      campAccessInput.disabled = true;
-      campAccessBox.classList.add('locked');
-      campAccessLabel.textContent = 'Prefect Camp Access — Yes';
-      campAccessSub.textContent = 'Automatically marked Yes for current Prefects.';
-    } else if (isOldPrefect) {
-      campAccessInput.disabled = false;
-      campAccessBox.classList.remove('locked');
-      campAccessLabel.textContent = 'Request Prefect Camp Access';
-      campAccessSub.textContent = 'Old Prefects can have this enabled only if the organizers choose.';
-    }
-  };
-
-  categoryInputs.forEach(input => {
-    input.addEventListener('change', () => applyCategoryRules(input.value));
-  });
-
-  /* =========================================================
-     Section 6 — Photo upload: validate + preview
-     ========================================================= */
-  const photoInput = document.getElementById('passportPhotoInput');
-  const photoPreviewImg = document.getElementById('photoPreviewImg');
-  const photoPreviewBox = document.getElementById('photoPreviewBox');
-  const photoFileName = document.getElementById('photoFileName');
-  const photoError = document.getElementById('photoError');
-  const photoUploadBtnLabel = document.getElementById('photoUploadBtnLabel');
-  const photoRequiredErr = document.getElementById('photoRequiredErr');
-
-  let photoDataUrl = '';
-  let photoValid = false;
-
-  photoInput.addEventListener('change', () => {
-    const file = photoInput.files && photoInput.files[0];
-    photoError.classList.remove('show');
-    photoRequiredErr.style.display = 'none';
-    photoValid = false;
-    photoDataUrl = '';
-
+  input.addEventListener('change', () => {
+    const file = input.files[0];
     if (!file) return;
 
-    const isRightType = file.type === 'image/jpeg' || file.type === 'image/png';
-    const isRightSize = file.size <= MAX_PHOTO_BYTES;
-
-    if (!isRightType || !isRightSize) {
-      photoError.classList.add('show');
-      photoInput.value = '';
-      photoFileName.textContent = '';
+    if (file.size > 8 * 1024 * 1024) {
+      alert('Please choose an image under 8MB.');
+      input.value = '';
       return;
     }
 
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      photoDataUrl = ev.target.result;
-      photoValid = true;
-      photoPreviewImg.src = photoDataUrl;
-      photoPreviewImg.style.display = 'block';
-      const placeholder = photoPreviewBox.querySelector('.pp-placeholder');
-      if (placeholder) placeholder.style.display = 'none';
-      photoFileName.textContent = file.name;
-      photoUploadBtnLabel.textContent = 'Change Photo';
+    reader.onload = (e) => {
+      const dataUrl = e.target.result; // "data:image/jpeg;base64,...."
+      const base64 = dataUrl.split(',')[1];
+      const mimeType = file.type || 'image/jpeg';
+
+      if (preview) preview.innerHTML = `<img src="${dataUrl}" alt="Preview">`;
+      if (upload) upload.classList.add('filled');
+      if (status) status.textContent = 'Uploaded';
+
+      onLoaded({ base64, mimeType, filename: file.name });
+      updateProgress();
+      checkSubmitEnabled();
     };
     reader.readAsDataURL(file);
   });
+}
 
-  /* =========================================================
-     Validation
-     ========================================================= */
-  const setInvalid = (field, invalid) => field.classList.toggle('invalid', invalid);
+setupPhotoUpload('captainUpload', 'captainPhoto', 'captainPreview', 'captainStatus', (data) => { captainPhotoData = data; });
+setupPhotoUpload('groupUpload', 'groupPhoto', 'groupPreview', 'groupStatus', (data) => { groupPhotoData = data; });
 
-  const validate = () => {
-    let ok = true;
+/* ---------- Progress bar ---------- */
+const form = document.getElementById('regForm') || document.getElementById('bandForm');
+const progressFill = document.getElementById('progressFill') || document.getElementById('uploadProgress');
+const progressPct = document.getElementById('progressPct') || document.getElementById('progressText');
 
-    form.querySelectorAll('.field').forEach(field => {
-      // skip validation for hidden conditional fields
-      if (field.offsetParent === null) return;
-      const input = field.querySelector('input[required], select[required]');
-      if (!input) return;
-      let fieldOk = true;
-      if (input.type === 'email') {
-        fieldOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value.trim());
-      } else if (input.type === 'tel') {
-        fieldOk = /^[0-9+\s-]{7,15}$/.test(input.value.trim());
-      } else {
-        fieldOk = input.value.trim().length > 0;
-      }
-      setInvalid(field, !fieldOk);
-      if (!fieldOk) ok = false;
-    });
+function updateProgress() {
+  if (!form) return;
+  const requiredFields = Array.from(form.querySelectorAll('[required]'));
+  let filled = 0;
+  requiredFields.forEach(f => {
+    if (f.type === 'checkbox') { if (f.checked) filled++; }
+    else if (f.value && f.value.trim() !== '') filled++;
+  });
 
-    if (processAgreeCheckbox && !processAgreeCheckbox.checked) {
-      formMsg.textContent = 'Please read the registration process and agree to continue before filling the form.';
-      formMsg.classList.add('error');
-      processAgreeCheckbox.closest('.process-check-row').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return false;
-    }
+  const totalPhotos = 2;
+  let photosFilled = (captainPhotoData ? 1 : 0) + (groupPhotoData ? 1 : 0);
 
-    /* category */
-    const categoryChecked = form.querySelector('input[name="category"]:checked');
-    document.getElementById('categoryErr').style.display = categoryChecked ? 'none' : 'block';
-    if (!categoryChecked) ok = false;
+  const total = requiredFields.length + totalPhotos;
+  const done = filled + photosFilled;
+  const pct = Math.min(100, Math.round((done / total) * 100));
 
-    /* photo (required) */
-    if (!photoValid) {
-      photoRequiredErr.style.display = 'block';
-      ok = false;
-    }
+  if (progressFill) progressFill.style.width = pct + '%';
+  if (progressPct) progressPct.textContent = pct + '%';
+}
 
-    /* consent */
-    const accurate = form.querySelector('input[name="confirmAccurate"]');
-    const agree = form.querySelector('input[name="agreeRules"]');
-    const consentOk = accurate.checked && agree.checked;
-    document.getElementById('consentErr').style.display = consentOk ? 'none' : 'block';
-    if (!consentOk) ok = false;
+if (form) {
+  form.addEventListener('input', updateProgress);
+  form.addEventListener('change', updateProgress);
+  updateProgress();
+}
 
-    return ok;
-  };
+/* ---------- Enable submit only once required photos are uploaded ---------- */
+const submitBtn = document.getElementById('submitBtn');
+const submitNote = document.getElementById('submitNote');
 
-  const fallbackRegId = () => {
-    const rand = Math.floor(1000 + Math.random() * 9000);
-    return 'ROAR-2026-' + rand;
-  };
+function checkSubmitEnabled() {
+  const ready = !!captainPhotoData && !!groupPhotoData;
+  if (submitBtn) submitBtn.disabled = !ready;
+  if (submitNote) {
+    submitNote.textContent = ready
+      ? 'Photos uploaded — review your details and submit'
+      : 'Upload both photos to enable submission';
+  }
+}
+checkSubmitEnabled();
 
+/* ---------- Submit ---------- */
+const formError = document.getElementById('formError');
+const regSuccess = document.getElementById('regSuccess');
+
+if (form) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    formMsg.textContent = '';
-    formMsg.className = 'form-msg';
+    if (formError) formError.classList.remove('show');
 
-    if (!validate()) {
-      formMsg.textContent = 'Please complete all required fields correctly.';
-      formMsg.classList.add('error');
-      const firstInvalid = form.querySelector('.field.invalid');
-      if (firstInvalid) firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (!form.checkValidity() || !captainPhotoData || !groupPhotoData) {
+      if (formError) {
+        formError.classList.add('show');
+        formError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        alert('Please complete all required fields and upload both photos.');
+      }
       return;
     }
 
-    const data = Object.fromEntries(new FormData(form).entries());
-    // FormData duplicates the file input under "photo" as a File object — replace with base64
-    delete data.photo;
-    data.photoBase64 = photoDataUrl ? photoDataUrl.split(',')[1] : '';
-    data.photoMime = photoInput.files[0] ? photoInput.files[0].type : '';
-    data.photoName = photoInput.files[0] ? photoInput.files[0].name : '';
-    data.campAccess = campAccessInput.checked;
-    data.timestamp = new Date().toISOString();
+    const fd = new FormData(form);
+    const members = [];
+    for (let i = 1; i <= MEMBER_COUNT; i++) {
+      members.push({
+        name: fd.get(`member${i}_name`) || form.querySelector(`[name="member${i}_name"]`)?.value || '',
+        instrument: fd.get(`member${i}_instrument`) || form.querySelector(`[name="member${i}_instrument"]`)?.value || '',
+        grade: fd.get(`member${i}_grade`) || form.querySelector(`[name="member${i}_grade"]`)?.value || '',
+        contact: fd.get(`member${i}_contact`) || form.querySelector(`[name="member${i}_contact"]`)?.value || ''
+      });
+    }
 
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="spinner"></span> Submitting…';
+    const payload = {
+      schoolName: fd.get('schoolName') || document.getElementById('schoolName')?.value || '',
+      bandName: fd.get('bandName') || document.getElementById('schoolName')?.value || '',
+      captainName: fd.get('captainName') || '',
+      captainRole: fd.get('captainRole') || '',
+      captainPhone: fd.get('captainPhone') || '',
+      captainEmail: fd.get('captainEmail') || document.getElementById('captainEmail')?.value || '',
+      members: members,
+      captainPhoto: captainPhotoData,
+      groupPhoto: groupPhotoData,
+      submittedAt: new Date().toISOString()
+    };
 
-    let regId = fallbackRegId();
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting…';
+    }
 
     try {
-      if (APPS_SCRIPT_URL && !APPS_SCRIPT_URL.includes('PASTE_')) {
-        const res = await fetch(APPS_SCRIPT_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight on Apps Script
-          body: JSON.stringify(data)
-        });
-        try {
-          const json = await res.json();
-          if (json && json.regId) regId = json.regId;
-        } catch (parseErr) {
-          console.warn('Could not parse Apps Script response, using local fallback ID.');
-        }
-      } else {
-        console.warn('APPS_SCRIPT_URL not set — skipping backend submission (demo mode).');
-      }
+      const res = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' } // avoids CORS preflight on Apps Script
+      });
+      const result = await res.json();
 
-      showSuccess(regId, data);
-      form.reset();
+      if (!result.success) throw new Error(result.message || 'Submission failed.');
+
+      form.style.display = 'none';
+      const progressShell = document.querySelector('.progress-shell');
+      if (progressShell) progressShell.style.display = 'none';
+      if (regSuccess) {
+        regSuccess.classList.add('show');
+      } else {
+        alert('Registration successful!');
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
     } catch (err) {
-      console.error(err);
-      formMsg.textContent = 'Something went wrong submitting your registration. Please try again.';
-      formMsg.classList.add('error');
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Submit Registration';
+      if (formError) {
+        formError.textContent = err.message || 'Something went wrong. Please try again.';
+        formError.classList.add('show');
+        formError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        alert(err.message || 'Something went wrong. Please try again.');
+      }
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Registration';
+      }
     }
   });
-
-  function showSuccess(regId, data) {
-    form.style.display = 'none';
-    progressFill.style.width = '100%';
-    successPanel.classList.add('show');
-    document.getElementById('regIdDisplay').textContent = regId;
-    document.getElementById('successCategory').textContent = (data.category || '').toUpperCase();
-    document.getElementById('successName').textContent = data.preferredName || data.fullName || 'Guest';
-
-    const qrPayload = encodeURIComponent(`${regId} | ${data.fullName} | ${data.category}`);
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${qrPayload}`;
-    document.getElementById('qrImage').src = qrUrl;
-
-    successPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-});
+}
